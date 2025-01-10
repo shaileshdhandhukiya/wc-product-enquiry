@@ -8,6 +8,11 @@ function message_notification_icon_shortcode() {
     ob_start();
     ?>
     <style>
+        .message-notification {
+            position: relative;
+            display: inline-block;
+            margin: 0 15px;
+        }
         .message-notification .count {
             position: absolute;
             top: -5px;

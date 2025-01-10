@@ -12,12 +12,13 @@ function messaging_ui_shortcode() {
     $current_user_id = get_current_user_id();
     $table_name = $wpdb->prefix . 'woocommerce_enquiries';
 
-    // Fetch unique threads for the current user
+    // Fetch unique threads for the current user (both sent and received)
     $messages = $wpdb->get_results($wpdb->prepare(
         "SELECT * FROM $table_name 
-         WHERE recipient_id = %d 
+         WHERE recipient_id = %d OR sender_id = %d
          GROUP BY product_id 
          ORDER BY MAX(created_at) DESC",
+        $current_user_id,
         $current_user_id
     ));
 
@@ -87,6 +88,12 @@ function view_message_page_shortcode() {
     $current_user_id = get_current_user_id();
     $table_name = $wpdb->prefix . 'woocommerce_enquiries';
 
+    // Get the first message to determine original sender
+    $first_message = $wpdb->get_row($wpdb->prepare(
+        "SELECT * FROM $table_name WHERE product_id = %d ORDER BY created_at ASC LIMIT 1",
+        $product_id
+    ));
+
     // Fetch messages for this product conversation
     $messages = $wpdb->get_results($wpdb->prepare(
         "SELECT * FROM $table_name WHERE product_id = %d AND (recipient_id = %d OR sender_id = %d) ORDER BY created_at ASC",
@@ -131,12 +138,17 @@ function view_message_page_shortcode() {
     // Handle reply submission
     if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['reply_message'])) {
         $reply_message = sanitize_textarea_field($_POST['reply_message']);
+        
+        // Set recipient as the other party in the conversation
+        $recipient_id = ($current_user_id == $first_message->sender_id) 
+            ? $first_message->recipient_id 
+            : $first_message->sender_id;
 
         $wpdb->insert($table_name, [
             'sender_id' => $current_user_id,
-            'recipient_id' => $messages[0]->sender_id,
+            'recipient_id' => $recipient_id,
             'message' => $reply_message,
-            'subject' => 'Re: ' . $messages[0]->subject,
+            'subject' => 'Re: ' . $first_message->subject,
             'product_id' => $product_id,
             'created_at' => current_time('mysql'),
             'is_read' => 0,
