@@ -21,9 +21,9 @@
     width: 90%;
     max-width: 400px;
     background: #fff;
-    border-radius: 8px;
+    border-radius: 5px;
     box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
-    padding: 20px;
+    padding: 30px 15px;
     text-align: center;
 }
 
@@ -55,11 +55,8 @@
 /* Submit Button */
 #enquiry-popup button[type="submit"] {
     display: inline-block;
-    background: #0071a1;
     color: #fff;
     border: none;
-    padding: 10px 20px;
-    border-radius: 4px;
     cursor: pointer;
 }
 

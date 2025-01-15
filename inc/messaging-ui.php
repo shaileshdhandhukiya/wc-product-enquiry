@@ -12,12 +12,13 @@ function messaging_ui_shortcode() {
     $current_user_id = get_current_user_id();
     $table_name = $wpdb->prefix . 'woocommerce_enquiries';
 
-    // Fetch unique threads for the current user (both sent and received)
+    // Fetch unique threads grouped by sender_id and product_id
     $messages = $wpdb->get_results($wpdb->prepare(
-        "SELECT * FROM $table_name 
+        "SELECT *, MAX(created_at) as last_message_time 
+         FROM $table_name 
          WHERE recipient_id = %d OR sender_id = %d
-         GROUP BY product_id 
-         ORDER BY MAX(created_at) DESC",
+         GROUP BY sender_id, product_id 
+         ORDER BY last_message_time DESC",
         $current_user_id,
         $current_user_id
     ));
@@ -28,8 +29,9 @@ function messaging_ui_shortcode() {
     <table>
         <thead>
             <tr>
+                <th>Name</th>
                 <th>Product</th>
-                <th>Last Message</th>
+                <th>Recent Message</th>
                 <th>Date</th>
                 <th>Unread</th>
                 <th>Actions</th>
@@ -41,22 +43,28 @@ function messaging_ui_shortcode() {
                     <?php
                     $unread_count = $wpdb->get_var($wpdb->prepare(
                         "SELECT COUNT(*) FROM $table_name 
-                         WHERE product_id = %d AND recipient_id = %d AND is_read = 0",
+                         WHERE product_id = %d AND sender_id = %d AND recipient_id = %d AND is_read = 0",
                         $message->product_id,
+                        $message->sender_id,
                         $current_user_id
                     ));
+                    $is_unread = $unread_count > 0; // Check if the message is unread
                     ?>
-                    <tr>
+                    <tr class="<?php echo $is_unread ? 'unread-messages' : ''; ?>">
+                        <td><?php echo esc_html(get_the_author_meta('display_name', $message->sender_id)); ?></td>
                         <td>
                             <a href="<?php echo esc_url(get_permalink($message->product_id)); ?>">
                                 <?php echo esc_html(get_the_title($message->product_id)); ?>
                             </a>
                         </td>
                         <td><?php echo esc_html(wp_trim_words($message->message, 10)); ?></td>
-                        <td><?php echo esc_html(date('Y-m-d H:i', strtotime($message->created_at))); ?></td>
+                        <td><?php echo esc_html(date('Y-m-d H:i', strtotime($message->last_message_time))); ?></td>
                         <td><?php echo esc_html($unread_count); ?></td>
                         <td>
-                            <a href="<?php echo esc_url(add_query_arg(['message_id' => $message->id, 'product_id' => $message->product_id], site_url('view-message'))); ?>">View</a>
+                            <a href="<?php echo esc_url(add_query_arg([
+                                'product_id' => $message->product_id,
+                                'sender_id' => $message->sender_id
+                            ], site_url('view-message'))); ?>">View</a>
                         </td>
                     </tr>
                 <?php endforeach; ?>
@@ -67,11 +75,16 @@ function messaging_ui_shortcode() {
             <?php endif; ?>
         </tbody>
     </table>
+    <style>
+        .unread-messages td{
+            font-weight: 800;
+        }
+    </style>
     <?php
     return ob_get_clean();
 }
 
-// Shortcode for Viewing and Replying to a Message
+// Shortcode for Viewing and Replying to a Message [view_message_page]
 add_shortcode('view_message_page', 'view_message_page_shortcode');
 
 function view_message_page_shortcode() {
@@ -79,33 +92,36 @@ function view_message_page_shortcode() {
         return '<p>Please log in to view this message.</p>';
     }
 
-    if (!isset($_GET['product_id'])) {
-        return '<p>No product conversation selected.</p>';
+    if (!isset($_GET['product_id']) || !isset($_GET['sender_id'])) {
+        return '<p>No conversation selected.</p>';
     }
 
     global $wpdb;
     $product_id = intval($_GET['product_id']);
+    $sender_id = intval($_GET['sender_id']);
     $current_user_id = get_current_user_id();
     $table_name = $wpdb->prefix . 'woocommerce_enquiries';
 
-    // Get the first message to determine original sender
-    $first_message = $wpdb->get_row($wpdb->prepare(
-        "SELECT * FROM $table_name WHERE product_id = %d ORDER BY created_at ASC LIMIT 1",
-        $product_id
-    ));
-
-    // Fetch messages for this product conversation
+    // Fetch all messages for this thread
     $messages = $wpdb->get_results($wpdb->prepare(
-        "SELECT * FROM $table_name WHERE product_id = %d AND (recipient_id = %d OR sender_id = %d) ORDER BY created_at ASC",
+        "SELECT * FROM $table_name 
+         WHERE product_id = %d AND (sender_id = %d OR recipient_id = %d) 
+         AND (recipient_id = %d OR sender_id = %d)
+         ORDER BY created_at ASC",
         $product_id,
+        $sender_id,
+        $sender_id,
         $current_user_id,
         $current_user_id
     ));
 
     // Mark messages as read
     $wpdb->query($wpdb->prepare(
-        "UPDATE $table_name SET is_read = 1 WHERE product_id = %d AND recipient_id = %d",
+        "UPDATE $table_name 
+         SET is_read = 1 
+         WHERE product_id = %d AND sender_id = %d AND recipient_id = %d",
         $product_id,
+        $sender_id,
         $current_user_id
     ));
 
@@ -131,24 +147,20 @@ function view_message_page_shortcode() {
     <form method="post">
         <textarea name="reply_message" rows="5" style="width: 100%;" required></textarea>
         <input type="hidden" name="product_id" value="<?php echo esc_attr($product_id); ?>">
-        <button type="submit">Send Reply</button>
+        <input type="hidden" name="sender_id" value="<?php echo esc_attr($sender_id); ?>">
+        <button type="submit" style="margin-top: 15px;">Send Reply</button>
     </form>
     <?php
 
     // Handle reply submission
     if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['reply_message'])) {
         $reply_message = sanitize_textarea_field($_POST['reply_message']);
-        
-        // Set recipient as the other party in the conversation
-        $recipient_id = ($current_user_id == $first_message->sender_id) 
-            ? $first_message->recipient_id 
-            : $first_message->sender_id;
 
         $wpdb->insert($table_name, [
             'sender_id' => $current_user_id,
-            'recipient_id' => $recipient_id,
+            'recipient_id' => $sender_id,
             'message' => $reply_message,
-            'subject' => 'Re: ' . $first_message->subject,
+            'subject' => 'Re: ' . get_the_title($product_id),
             'product_id' => $product_id,
             'created_at' => current_time('mysql'),
             'is_read' => 0,

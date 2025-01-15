@@ -16,7 +16,7 @@ function add_enquiry_button()
             <label>Message:</label>
             <textarea name="message" required></textarea>
             <input type="hidden" name="product_id" value="<?php echo get_the_ID(); ?>">
-            <button type="submit">Send</button>
+            <button type="submit" class="button">Send</button>
         </form>
     </div>
 
@@ -26,6 +26,7 @@ function add_enquiry_button()
             const enquiryPopup = document.getElementById('enquiry-popup');
             const overlay = document.getElementById('enquiry-popup-overlay');
             const closePopup = document.getElementById('close-enquiry-popup');
+            const enquiryForm = document.getElementById('enquiry-form');
 
             // Show Modal
             enquiryButton.addEventListener('click', function () {
@@ -46,7 +47,8 @@ function add_enquiry_button()
             });
 
             // Submit the enquiry form
-            document.getElementById('enquiry-form').addEventListener('submit', function (e) {
+            enquiryForm.addEventListener('submit', function (e) {
+
                 e.preventDefault();
                 const formData = new FormData(this);
                 formData.append('action', 'submit_enquiry');
@@ -57,10 +59,13 @@ function add_enquiry_button()
                 })
                 .then(response => response.json())
                 .then(data => {
-                    alert(data.data);
+                    // alert(data.data);
                     if (data.success) {
                         enquiryPopup.style.display = 'none';
                         overlay.style.display = 'none';
+
+                         // Reset the form fields
+                        enquiryForm.reset();
                     }
                 });
             });
