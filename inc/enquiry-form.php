@@ -113,7 +113,9 @@ function handle_enquiry_submission()
         send_enquiry_notification($recipient_id, $subject, $message);
 
         wp_send_json_success('Enquiry sent successfully!');
+
     } else {
+
         wp_send_json_error('Failed to send enquiry.');
     }
 }
@@ -128,9 +130,49 @@ function handle_enquiry_submission()
  */
 function send_enquiry_notification($recipient_id, $subject, $message)
 {
-    $recipient_email    = get_the_author_meta('user_email', $recipient_id);
-    $sender_email       = wp_get_current_user()->user_email;
+    $recipient_email = get_the_author_meta('user_email', $recipient_id);
+    $sender = wp_get_current_user();
 
-    wp_mail($recipient_email, 'New Enquiry Received', $message);
-    wp_mail($sender_email, 'Enquiry Sent', 'Your enquiry has been sent successfully.');
+    // Email details
+    $sender_name = $sender->display_name;
+    $sender_email = $sender->user_email;
+    $product_id = intval($_POST['product_id']);
+    $product_name = get_the_title($product_id);
+
+    // Email content
+    $email_message = "
+        Hi Admin,
+
+        Please find the details of the customer enquiry below:
+
+        Name: {$sender_name}
+        Email: {$sender_email}
+        Product: {$product_name}
+
+        Message:
+        {$message}
+
+        Regards,
+        Your Website Team
+    ";
+
+    // Send email to the recipient
+    wp_mail($recipient_email, $subject, $email_message);
+
+    // Send confirmation to the sender
+    $confirmation_subject = "Enquiry Sent: {$product_name}";
+    $confirmation_message = "
+        Hi {$sender_name},
+
+        Thank you for your enquiry. Below are the details of your message:
+
+        Product: {$product_name}
+        Message:
+        {$message}
+
+        Regards,
+        Your Website Team
+    ";
+    wp_mail($sender_email, $confirmation_subject, $confirmation_message);
 }
+
