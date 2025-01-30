@@ -63,3 +63,7 @@
 #enquiry-popup button[type="submit"]:hover {
     background: #005f85;
 }
+
+.unread-messages td{
+    font-weight: 800;
+}

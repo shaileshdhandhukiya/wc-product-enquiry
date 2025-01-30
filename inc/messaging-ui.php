@@ -3,7 +3,8 @@
 // Shortcode for Listing Messages
 add_shortcode('messaging_ui', 'messaging_ui_shortcode');
 
-function messaging_ui_shortcode() {
+function messaging_ui_shortcode()
+{
     if (!is_user_logged_in()) {
         return '<p>Please log in to view your messages.</p>';
     }
@@ -12,20 +13,24 @@ function messaging_ui_shortcode() {
     $current_user_id = get_current_user_id();
     $table_name = $wpdb->prefix . 'woocommerce_enquiries';
 
-    // Fetch unique threads grouped by sender_id and product_id
+    // Fetch the latest message per conversation (by product_id and sender/receiver)
     $messages = $wpdb->get_results($wpdb->prepare(
-        "SELECT *, MAX(created_at) as last_message_time 
-         FROM $table_name 
-         WHERE recipient_id = %d OR sender_id = %d
-         GROUP BY sender_id, product_id 
-         ORDER BY last_message_time DESC",
+        "SELECT e1.*
+         FROM $table_name e1
+         INNER JOIN (
+            SELECT MAX(id) as max_id
+            FROM $table_name
+            WHERE recipient_id = %d OR sender_id = %d
+            GROUP BY product_id, LEAST(sender_id, recipient_id), GREATEST(sender_id, recipient_id)
+         ) e2 ON e1.id = e2.max_id
+         ORDER BY e1.created_at DESC",
         $current_user_id,
         $current_user_id
     ));
 
     ob_start();
+
     ?>
-    <h2>Your Messages</h2>
     <table>
         <thead>
             <tr>
@@ -41,14 +46,20 @@ function messaging_ui_shortcode() {
             <?php if (!empty($messages)) : ?>
                 <?php foreach ($messages as $message): ?>
                     <?php
+                    // Count unread messages for the thread
                     $unread_count = $wpdb->get_var($wpdb->prepare(
-                        "SELECT COUNT(*) FROM $table_name 
-                         WHERE product_id = %d AND sender_id = %d AND recipient_id = %d AND is_read = 0",
+                        "SELECT COUNT(*) 
+                         FROM $table_name 
+                         WHERE product_id = %d 
+                         AND recipient_id = %d 
+                         AND sender_id = %d 
+                         AND is_read = 0",
                         $message->product_id,
-                        $message->sender_id,
-                        $current_user_id
+                        $current_user_id,
+                        $message->sender_id
                     ));
-                    $is_unread = $unread_count > 0; // Check if the message is unread
+
+                    $is_unread = $unread_count > 0;
                     ?>
                     <tr class="<?php echo $is_unread ? 'unread-messages' : ''; ?>">
                         <td><?php echo esc_html(get_the_author_meta('display_name', $message->sender_id)); ?></td>
@@ -58,36 +69,43 @@ function messaging_ui_shortcode() {
                             </a>
                         </td>
                         <td><?php echo esc_html(wp_trim_words($message->message, 10)); ?></td>
-                        <td><?php echo esc_html(date('Y-m-d H:i', strtotime($message->last_message_time))); ?></td>
+                        <td><?php echo esc_html(date('Y-m-d H:i', strtotime($message->created_at))); ?></td>
                         <td><?php echo esc_html($unread_count); ?></td>
                         <td>
                             <a href="<?php echo esc_url(add_query_arg([
-                                'product_id' => $message->product_id,
-                                'sender_id' => $message->sender_id
-                            ], site_url('view-message'))); ?>">View</a>
+                                            'product_id' => $message->product_id,
+                                            'sender_id' => $message->sender_id
+                                        ], site_url('view-message'))); ?>">
+                                View
+                            </a>
                         </td>
                     </tr>
                 <?php endforeach; ?>
             <?php else : ?>
                 <tr>
-                    <td colspan="5">No messages found.</td>
+                    <td colspan="6">No messages found.</td>
                 </tr>
             <?php endif; ?>
         </tbody>
     </table>
+
     <style>
-        .unread-messages td{
+        .unread-messages td {
             font-weight: 800;
         }
     </style>
+
     <?php
+
     return ob_get_clean();
 }
 
-// Shortcode for Viewing and Replying to a Message [view_message_page]
+// Shortcode for Viewing and Replying to a Message
 add_shortcode('view_message_page', 'view_message_page_shortcode');
 
-function view_message_page_shortcode() {
+function view_message_page_shortcode()
+{
+
     if (!is_user_logged_in()) {
         return '<p>Please log in to view this message.</p>';
     }
@@ -103,15 +121,28 @@ function view_message_page_shortcode() {
     $table_name = $wpdb->prefix . 'woocommerce_enquiries';
 
     // Fetch all messages for this thread
+    // $messages = $wpdb->get_results($wpdb->prepare(
+    //     "SELECT * FROM $table_name 
+    //      WHERE product_id = %d AND (sender_id = %d OR recipient_id = %d) 
+    //      AND (recipient_id = %d OR sender_id = %d)
+    //      ORDER BY created_at ASC",
+    //     $product_id,
+    //     $sender_id,
+    //     $sender_id,
+    //     $current_user_id,
+    //     $current_user_id
+    // ));
+
     $messages = $wpdb->get_results($wpdb->prepare(
         "SELECT * FROM $table_name 
-         WHERE product_id = %d AND (sender_id = %d OR recipient_id = %d) 
-         AND (recipient_id = %d OR sender_id = %d)
+         WHERE product_id = %d 
+           AND ((sender_id = %d AND recipient_id = %d) 
+                OR (sender_id = %d AND recipient_id = %d))
          ORDER BY created_at ASC",
         $product_id,
-        $sender_id,
-        $sender_id,
         $current_user_id,
+        $sender_id,
+        $sender_id,
         $current_user_id
     ));
 
@@ -126,6 +157,7 @@ function view_message_page_shortcode() {
     ));
 
     ob_start();
+
     ?>
     <h2>Conversation for: <?php echo esc_html(get_the_title($product_id)); ?></h2>
     <div>
@@ -153,6 +185,23 @@ function view_message_page_shortcode() {
     <?php
 
     // Handle reply submission
+    // if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['reply_message'])) {
+    //     $reply_message = sanitize_textarea_field($_POST['reply_message']);
+
+    //     $wpdb->insert($table_name, [
+    //         'sender_id' => $current_user_id,
+    //         'recipient_id' => $sender_id,
+    //         'message' => $reply_message,
+    //         'subject' => 'Re: ' . get_the_title($product_id),
+    //         'product_id' => $product_id,
+    //         'created_at' => current_time('mysql'),
+    //         'is_read' => 0,
+    //     ]);
+
+    //     echo '<p>Reply sent successfully!</p>';
+    // }
+
+    // Handle reply submission
     if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['reply_message'])) {
         $reply_message = sanitize_textarea_field($_POST['reply_message']);
 
@@ -167,7 +216,14 @@ function view_message_page_shortcode() {
         ]);
 
         echo '<p>Reply sent successfully!</p>';
+        // Redirect to avoid resubmission
+        wp_redirect(add_query_arg([
+            'product_id' => $product_id,
+            'sender_id' => $sender_id,
+        ], site_url('view-message')));
+        exit;
     }
+
 
     return ob_get_clean();
 }
