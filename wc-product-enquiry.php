@@ -35,6 +35,9 @@ require_once plugin_dir_path(__FILE__) . 'inc/enquiry-form.php';
 // Messaging UI
 require_once plugin_dir_path(__FILE__) . 'inc/messaging-ui.php';
 
+// Helper functions
+require_once plugin_dir_path(__FILE__) . 'inc/helper.php';
+
 /* 
 * Create custom enquiries table
  */

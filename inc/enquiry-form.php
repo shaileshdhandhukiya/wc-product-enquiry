@@ -4,7 +4,8 @@ add_action('woocommerce_single_product_summary', 'add_enquiry_button', 35);
 function add_enquiry_button()
 {
     if (!is_user_logged_in()) {
-        echo '<p><a href="' . wp_login_url(get_permalink()) . '" class="button">Please log in to send an enquiry</a></p>';
+        // echo '<p><a href="' . wc_get_page_permalink('myaccount') . '" class="button">Please log in to send an enquiry</a></p>';
+        echo '<p><a href="#" class="button woo-login-popup">Please log in to send an enquiry</a></p>';
         return;
     }
     ?>
