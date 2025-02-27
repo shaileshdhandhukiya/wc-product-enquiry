@@ -67,3 +67,9 @@
 .unread-messages td{
     font-weight: 800;
 }
+
+
+
+.woocommerce-wishlist table.wishlist_table td.product-add-to-cart .add_to_cart_button {
+    display: none !important;
+}

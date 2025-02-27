@@ -75,3 +75,22 @@ function delete_custom_enquiries_table() {
     $table_name = $wpdb->prefix . 'woocommerce_enquiries';
     $wpdb->query("DROP TABLE IF EXISTS $table_name");
 }
+
+
+function add_custom_button_to_yith_wishlist($item) {
+    // Get the product ID
+    $product_id = $item['product_id'];
+
+    // Get the product permalink (single product page URL)
+    $custom_url = get_permalink($product_id);
+
+    // Button Label
+    $button_label = __('Send Enquiry', 'your-text-domain');
+
+    // Output the button
+    echo '<a href="' . esc_url($custom_url) . '#enquiry-button" class="button custom-wishlist-button" style="margin-left:10px;">' . esc_html($button_label) . '</a>';
+}
+
+// Corrected action hook
+add_action('yith_wcwl_table_after_product_cart', 'add_custom_button_to_yith_wishlist');
+

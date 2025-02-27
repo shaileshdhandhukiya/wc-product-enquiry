@@ -59,7 +59,7 @@ function message_notification_icon_shortcode() {
             updateMessageCount();
 
             // Optionally poll for updates (every 30 seconds)
-            setInterval(updateMessageCount, 3000);
+            // setInterval(updateMessageCount, 3000);
         });
     </script>
     <?php

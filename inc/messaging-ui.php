@@ -31,6 +31,7 @@ function messaging_ui_shortcode()
     ob_start();
 
     ?>
+
     <table>
         <thead>
             <tr>
@@ -78,6 +79,8 @@ function messaging_ui_shortcode()
                                         ], site_url('view-message'))); ?>">
                                 View
                             </a>
+                            <button id="delete-thread" data-product-id="<?php echo esc_attr($message->product_id); ?>">Delete Entire Thread</button>
+
                         </td>
                     </tr>
                 <?php endforeach; ?>
@@ -88,6 +91,36 @@ function messaging_ui_shortcode()
             <?php endif; ?>
         </tbody>
     </table>
+
+    <script>
+        jQuery(document).ready(function($) {
+            // Delete Entire Thread
+            $("#delete-thread").click(function() {
+                if (!confirm("Are you sure you want to delete the entire conversation?")) return;
+
+                var productId = $(this).data("product-id");
+
+                $.ajax({
+                    type: "POST",
+                    url: "<?php echo admin_url('admin-ajax.php'); ?>",
+                    data: {
+                        action: "delete_thread",
+                        product_id: productId,
+                        security: "<?php echo wp_create_nonce('delete_message_nonce'); ?>"
+                    },
+                    success: function(response) {
+                        if (response.success) {
+                            alert("Thread deleted successfully!");
+                            window.location.href = "<?php echo site_url('enquiry'); ?>";
+                        } else {
+                            alert(response.data);
+                        }
+                    }
+                });
+            });
+
+        });
+    </script>
 
     <style>
         .unread-messages td {
@@ -158,7 +191,7 @@ function view_message_page_shortcode()
 
     ob_start();
 
-    ?>
+?>
     <h2>Conversation for: <?php echo esc_html(get_the_title($product_id)); ?></h2>
     <div>
         <?php if (!empty($messages)) : ?>
@@ -167,6 +200,7 @@ function view_message_page_shortcode()
                     <strong><?php echo esc_html(get_userdata($message->sender_id)->display_name); ?>:</strong>
                     <p><?php echo nl2br(esc_html($message->message)); ?></p>
                     <small><?php echo esc_html(date('Y-m-d H:i', strtotime($message->created_at))); ?></small>
+                    <button class="delete-single-message" data-id="<?php echo $message->id; ?>">Delete</button>
                 </div>
                 <hr>
             <?php endforeach; ?>
@@ -224,6 +258,43 @@ function view_message_page_shortcode()
         exit;
     }
 
+    ?>
+
+    <script>
+        jQuery(document).ready(function($) {
+            // Delete Single Message
+            $(".delete-single-message").click(function() {
+
+                if (!confirm("Are you sure you want to delete this message?")) return;
+
+                var messageId = $(this).data("id");
+                var messageDiv = $(this).closest("div");
+
+                $.ajax({
+                    type: "POST",
+                    url: "<?php echo admin_url('admin-ajax.php'); ?>",
+                    data: {
+                        action: "delete_single_message",
+                        message_id: messageId,
+                        security: "<?php echo wp_create_nonce('delete_message_nonce'); ?>"
+                    },
+                    success: function(response) {
+                        if (response.success) {
+                            messageDiv.fadeOut();
+                        } else {
+                            alert(response.data);
+                        }
+                    }
+                });
+            });
+
+        });
+    </script>
+
+<?php
+
 
     return ob_get_clean();
 }
+
+// AJAX Callback for Deleting a Single Message

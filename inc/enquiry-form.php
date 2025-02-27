@@ -1,14 +1,44 @@
 <?php
+
+
+// Hook the custom button function to the YITH Wishlist table
+
 add_action('woocommerce_single_product_summary', 'add_enquiry_button', 35);
 
 function add_enquiry_button()
 {
+
     if (!is_user_logged_in()) {
         // echo '<p><a href="' . wc_get_page_permalink('myaccount') . '" class="button">Please log in to send an enquiry</a></p>';
         echo '<p><a href="#" class="button woo-login-popup">Please log in to send an enquiry</a></p>';
         return;
     }
+
+    if (is_singular('product')) {
+        $product_id = get_the_ID();
+    } else {
+        $product_id = isset( $item['prod_id'] ) ? $item['prod_id'] : get_query_var( 'product_id' );
+    }
+    
+    if (!$product_id) {
+        return; // Stop if no product ID is found
+    }
+
+    // $product_id = get_the_ID();
+
+    // Get current user ID
+    $current_user_id = get_current_user_id();
+
+    // Get the product author's ID
+    $author_id = get_post_field('post_author', $product_id);
+
+    // If the logged-in user is the author of this product, show warning
+    if ($current_user_id == $author_id) {
+        echo '<p class="warning-message">You cannot send an enquiry for your own product.</p>';
+        return;
+    } 
     ?>
+
     <button id="enquiry-button" class="button">Send Enquiry</button>
     <div id="enquiry-popup-overlay"></div> <!-- Overlay -->
     <div id="enquiry-popup">
@@ -22,7 +52,7 @@ function add_enquiry_button()
     </div>
 
     <script>
-        document.addEventListener('DOMContentLoaded', function () {
+        document.addEventListener('DOMContentLoaded', function() {
             const enquiryButton = document.getElementById('enquiry-button');
             const enquiryPopup = document.getElementById('enquiry-popup');
             const overlay = document.getElementById('enquiry-popup-overlay');
@@ -30,45 +60,45 @@ function add_enquiry_button()
             const enquiryForm = document.getElementById('enquiry-form');
 
             // Show Modal
-            enquiryButton.addEventListener('click', function () {
+            enquiryButton.addEventListener('click', function() {
                 enquiryPopup.style.display = 'block';
                 overlay.style.display = 'block';
             });
 
             // Close Modal on overlay click
-            overlay.addEventListener('click', function () {
+            overlay.addEventListener('click', function() {
                 enquiryPopup.style.display = 'none';
                 overlay.style.display = 'none';
             });
 
             // Close Modal on close button click
-            closePopup.addEventListener('click', function () {
+            closePopup.addEventListener('click', function() {
                 enquiryPopup.style.display = 'none';
                 overlay.style.display = 'none';
             });
 
             // Submit the enquiry form
-            enquiryForm.addEventListener('submit', function (e) {
+            enquiryForm.addEventListener('submit', function(e) {
 
                 e.preventDefault();
                 const formData = new FormData(this);
                 formData.append('action', 'submit_enquiry');
 
                 fetch('<?php echo admin_url('admin-ajax.php'); ?>', {
-                    method: 'POST',
-                    body: formData,
-                })
-                .then(response => response.json())
-                .then(data => {
-                    // alert(data.data);
-                    if (data.success) {
-                        enquiryPopup.style.display = 'none';
-                        overlay.style.display = 'none';
+                        method: 'POST',
+                        body: formData,
+                    })
+                    .then(response => response.json())
+                    .then(data => {
+                        // alert(data.data);
+                        if (data.success) {
+                            enquiryPopup.style.display = 'none';
+                            overlay.style.display = 'none';
 
-                         // Reset the form fields
-                        enquiryForm.reset();
-                    }
-                });
+                            // Reset the form fields
+                            enquiryForm.reset();
+                        }
+                    });
             });
         });
     </script>
@@ -114,7 +144,6 @@ function handle_enquiry_submission()
         send_enquiry_notification($recipient_id, $subject, $message);
 
         wp_send_json_success('Enquiry sent successfully!');
-
     } else {
 
         wp_send_json_error('Failed to send enquiry.');
@@ -147,14 +176,13 @@ function send_enquiry_notification($recipient_id, $subject, $message)
         Please find the details of the customer enquiry below:
 
         Name: {$sender_name}
-        Email: {$sender_email}
         Product: {$product_name}
 
         Message:
         {$message}
 
         Regards,
-        Your Website Team
+        WatchMarket Team
     ";
 
     // Send email to the recipient
@@ -172,7 +200,7 @@ function send_enquiry_notification($recipient_id, $subject, $message)
         {$message}
 
         Regards,
-        Your Website Team
+        WatchMarket Team
     ";
     wp_mail($sender_email, $confirmation_subject, $confirmation_message);
 }
